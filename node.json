@@ -4,7 +4,9 @@
     "recipe[consul]"
   ],
   "consul": {
+    "service_mode" : "cluster",
     "servers" : CONSUL_ADDRESSES,
-    "datacenter" : REGION
+    "datacenter" : "REGION",
+    "bootstrap_expect": CLUSTER_SIZE
   }
 }

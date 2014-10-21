@@ -28,7 +28,7 @@ def splice_ref(lines, pattern, replacement):
 
 template = Template()
 
-template.description = "Start a Kafka cluster"
+template.description = "Start a Consul cluster"
 
 # Parameters
 instance_type = template.add_parameter(Parameter(
@@ -78,7 +78,7 @@ vpc_id = template.add_parameter(Parameter(
 
 admin_security_group = template.add_parameter(Parameter(
     "AdminSecurityGroup",
-    Description = "Existing security group that should be granded administrative access to Kafka (e.g., 'sg-123456')",
+    Description = "Existing security group that should be granded administrative access to Consul (e.g., 'sg-123456')",
     Type = "String"
 ))
 
@@ -137,7 +137,7 @@ host_keys = template.add_resource(iam.AccessKey(
 
 server_security_group = template.add_resource(ec2.SecurityGroup(
     "ServerSecurityGroup",
-    GroupDescription = "Enable SSH and Kafka access",
+    GroupDescription = "Enable SSH and Consul access",
     VpcId = Ref(vpc_id),
     SecurityGroupIngress = [
         ec2.SecurityGroupRule(
@@ -194,7 +194,7 @@ replacements = [
     ["WAIT_HANDLE", Ref(wait_handle)],
     ["ACCESS_KEY", Ref(host_keys)],
     ["SECRET_KEY", GetAtt(host_keys, "SecretAccessKey")],
-    ["CLUSTER", "es-catalog"],
+    ["CLUSTER_SIZE", Ref(cluster_size)],
     ["REGION", Ref("AWS::Region")],
     ["ENVIRONMENT", Ref(environment)],
     ["GROUPS", GetAtt(server_security_group, "GroupId")]
@@ -234,7 +234,7 @@ server_group = template.add_resource(autoscaling.AutoScalingGroup(
     LoadBalancerNames = [Ref(elastic_load_balancer)],
     VPCZoneIdentifier = Ref(subnets),
     Tags = [
-        {"Key" : "Name", "Value" : Join("", [Ref("AWS::StackName"), "-instance"]), "PropagateAtLaunch" : "true"},
+        {"Key" : "Name", "Value" : Join("-", [Ref("AWS::Region"), Ref(environment), "consul"]), "PropagateAtLaunch" : "true"},
         {"Key" : "role", "Value" : "elasticsearch_catalog", "PropagateAtLaunch" : "true"} 
     ]
 ))
