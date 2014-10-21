@@ -1,2 +1,5 @@
-kafka_formation.template: kafka_formation.py cloud-init.sh node.json
+
+all: consul_formation.template
+
+%.template: %.py cloud-init.sh node.json
 	python $< > $@
