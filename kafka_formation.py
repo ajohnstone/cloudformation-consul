@@ -43,6 +43,13 @@ instance_type = template.add_parameter(Parameter(
     ConstraintDescription = "must be a valid EC2 instance type."
 ))
 
+environment = template.add_parameter(Parameter(
+    "Environment",
+    Description = "Environment (example: dev, prod)",
+    Type = "String",
+    Default = "dev"
+))
+
 keyname = template.add_parameter(Parameter(
     "KeyName",
     Description = "Name of an existing EC2 KeyPair to enable SSH "
@@ -54,7 +61,7 @@ cluster_size = template.add_parameter(Parameter(
     "ClusterSize",
     Description = "Number of nodes to launch",
     Type = "Number",
-    Default = "2"
+    Default = "3"
 ))
 
 subnets = template.add_parameter(Parameter(
@@ -80,12 +87,6 @@ availability_zones = template.add_parameter(Parameter(
     Description = "(Optional) If passed, only launch nodes in these AZs (e.g., 'us-east-1a,us-east-1b'). Note: these must match up with the passed Subnets.",
     Type = "CommaDelimitedList",
     Default = ""
-))
-
-zookeeper_url = template.add_parameter(Parameter(
-    "ZookeeperLocation",
-    Description = "Hostname or IP pointing to the Zookeeper cluster.",
-    Type = "String"
 ))
 
 # Mappings
@@ -195,8 +196,8 @@ replacements = [
     ["SECRET_KEY", GetAtt(host_keys, "SecretAccessKey")],
     ["CLUSTER", "es-catalog"],
     ["REGION", Ref("AWS::Region")],
-    ["GROUPS", GetAtt(server_security_group, "GroupId")],
-    ["ZOOKEEPER", Ref(zookeeper_url)]
+    ["ENVIRONMENT", Ref(environment)],
+    ["GROUPS", GetAtt(server_security_group, "GroupId")]
 ]
 
 for pair in replacements:

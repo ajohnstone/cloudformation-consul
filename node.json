@@ -1,13 +1,10 @@
 {
-  "name": "elasticsearch-cookbook-test",
+  "name": "consul-cookbook-test",
   "run_list": [
-    "recipe[kafka]"
+    "recipe[consul]"
   ],
-  "kafka": {
-    "broker" : {
-      "zookeeper" : {
-        "connect": "ZOOKEEPER"
-      }
-    }
+  "consul": {
+    "servers" : CONSUL_ADDRESSES,
+    "datacenter" : REGION
   }
 }
