@@ -1,0 +1,13 @@
+{
+  "name": "elasticsearch-cookbook-test",
+  "run_list": [
+    "recipe[kafka]"
+  ],
+  "kafka": {
+    "broker" : {
+      "zookeeper" : {
+        "connect": "ZOOKEEPER"
+      }
+    }
+  }
+}
