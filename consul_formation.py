@@ -4,7 +4,6 @@ from troposphere import *
 import troposphere.iam as iam
 import troposphere.autoscaling as autoscaling
 import troposphere.ec2 as ec2
-import troposphere.elasticloadbalancing as elb
 import troposphere.cloudformation as cloudformation
 import awacs
 import awacs.aws
@@ -160,27 +159,6 @@ security_group_ingress = template.add_resource(ec2.SecurityGroupIngress(
 
 wait_handle = template.add_resource(cloudformation.WaitConditionHandle("WaitHandle"))
 
-elastic_load_balancer = template.add_resource(elb.LoadBalancer(
-    "ElasticLoadBalancer",
-    Scheme = "internal",
-    SecurityGroups = [Ref(admin_security_group)],
-    Subnets = Ref(subnets),
-    Listeners = [
-        elb.Listener(
-            LoadBalancerPort = "9200",
-            InstancePort = "9200",
-            Protocol = "HTTP"
-        )
-    ],
-    HealthCheck = elb.HealthCheck(
-        Target = "HTTP:9200/_cluster/health",
-        HealthyThreshold = "3",
-        UnhealthyThreshold = "5",
-        Interval = "30",
-        Timeout = "5"
-    )
-))
-
 # Load up and process the cloud-init script
 
 cloud_init_script = open("cloud-init.sh", 'r').read().replace("\n", "\n" + ENDLINE)
@@ -231,7 +209,6 @@ server_group = template.add_resource(autoscaling.AutoScalingGroup(
     MinSize = "1",
     MaxSize = "9",
     DesiredCapacity = Ref(cluster_size),
-    LoadBalancerNames = [Ref(elastic_load_balancer)],
     VPCZoneIdentifier = Ref(subnets),
     Tags = [
         {"Key" : "Name", "Value" : Join("-", [Ref("AWS::Region"), Ref(environment), "consul"]), "PropagateAtLaunch" : "true"},
