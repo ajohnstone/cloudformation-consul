@@ -1,9 +1,4 @@
 #!/bin/bash -v
-# Install prerequisites
-sudo apt-get update
-sudo apt-get install --yes openjdk-7-jre-headless
-sudo curl -o /tmp/chefdk_0.3.0-1_amd64.deb http://opscode-omnibus-packages.s3.amazonaws.com/ubuntu/12.04/x86_64/chefdk_0.3.0-1_amd64.deb
-sudo dpkg -i /tmp/chefdk_0.3.0-1_amd64.deb
 
 mkdir -p ~/.aws
 
