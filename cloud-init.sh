@@ -22,4 +22,4 @@ sudo berks vendor /var/chef/cookbooks/ --berksfile=/tmp/consul/Berksfile
 sudo chef-solo -N consul-test-chef-solo -j node.json
 
 # All is well so signal success
-/opt/aws/bin/cfn-signal -e 0 -r "Elasticsearch setup complete" 'WAIT_HANDLE'
+/usr/local/bin/cfn-signal -e 0 -r "Elasticsearch setup complete" 'WAIT_HANDLE'
