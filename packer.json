@@ -1,0 +1,30 @@
+{
+  "description": "Spongecell Consul Server",
+  "builders": [
+    {
+      "name": "consul-hvm",
+      "type": "amazon-ebs",
+      "ami_virtualization_type": "hvm",
+      "ami_name": "consul-hvm-{{ isotime | clean_ami_name }}",
+      "instance_type": "m3.medium",
+      "region": "us-east-1",
+      "source_ami": "ami-fe01b796",
+      "ssh_username": "ubuntu",
+      "tags": {
+        "Name": "consul-hvm"
+      }
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "script": "./packer_provision.sh"
+    },
+    {
+      "type": "chef-solo",
+      "skip_install": "true",
+      "cookbook_paths": [ "vendor/cookbooks" ],
+      "run_list": ["consul::install_binary"]
+    }
+  ]
+}
