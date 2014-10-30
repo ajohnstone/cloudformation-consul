@@ -1,0 +1,10 @@
+{
+  "AdminSecurityGroup": "sg-3838f15d",
+  "AvailabilityZones": "",
+  "ClusterSize": "3",
+  "Environment": "dev",
+  "InstanceType": "m3.medium",
+  "KeyName": "ap-southeast-2-dev-default",
+  "Subnets": "subnet-d4e621b1,subnet-3a1cf14d",
+  "VpcId": "vpc-d14ebab4"
+}
