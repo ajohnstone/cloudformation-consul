@@ -7,4 +7,4 @@ if [[ -d vendor/cookbooks ]]; then
 fi
 
 bundle exec berks vendor vendor/cookbooks
-packer build packer.json
+packer build ami/packer.json

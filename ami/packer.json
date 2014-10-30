@@ -18,12 +18,13 @@
   "provisioners": [
     {
       "type": "shell",
-      "script": "./packer_provision.sh"
+      "script": "./ami/packer_provision.sh"
     },
     {
       "type": "chef-solo",
       "skip_install": "true",
       "cookbook_paths": [ "vendor/cookbooks" ],
+      "staging_directory": "/home/ubuntu/packer-chef-solo",
       "run_list": ["consul::install_binary"]
     }
   ]
