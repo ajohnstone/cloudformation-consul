@@ -1,0 +1,307 @@
+{
+    "Conditions": {
+        "UseAllAvailabilityZones": {
+            "Fn::Equals": [
+                {
+                    "Fn::Join": [
+                        "", 
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                }, 
+                ""
+            ]
+        }
+    }, 
+    "Description": "Start a Consul cluster", 
+    "Mappings": {
+        "RegionMap": {
+            "ap-southeast-2": {
+                "AMI": "ami-c16d00fb"
+            }, 
+            "us-east-1": {
+                "AMI": "ami-fe01b796"
+            }
+        }
+    }, 
+    "Parameters": {
+        "AdminSecurityGroup": {
+            "Description": "Existing security group that should be granded administrative access to Consul (e.g., 'sg-123456')", 
+            "Type": "String"
+        }, 
+        "AvailabilityZones": {
+            "Default": "", 
+            "Description": "(Optional) If passed, only launch nodes in these AZs (e.g., 'us-east-1a,us-east-1b'). Note: these must match up with the passed Subnets.", 
+            "Type": "CommaDelimitedList"
+        }, 
+        "ClusterSize": {
+            "Default": "3", 
+            "Description": "Number of nodes to launch", 
+            "Type": "Number"
+        }, 
+        "Environment": {
+            "Default": "dev", 
+            "Description": "Environment (example: dev, prod)", 
+            "Type": "String"
+        }, 
+        "InstanceType": {
+            "AllowedValues": [
+                "m3.medium", 
+                "m3.large"
+            ], 
+            "ConstraintDescription": "must be a valid EC2 instance type.", 
+            "Default": "m3.medium", 
+            "Description": "EC2 instance type", 
+            "Type": "String"
+        }, 
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance", 
+            "Type": "String"
+        }, 
+        "Subnets": {
+            "Description": "List of VPC subnet IDs for the cluster. Note: must match up with the passed AvailabilityZones", 
+            "Type": "CommaDelimitedList"
+        }, 
+        "VpcId": {
+            "Description": "VPC associated with the provided subnets", 
+            "Type": "String"
+        }
+    }, 
+    "Resources": {
+        "BootstrapLoadBalancer": {
+            "Properties": {
+                "Listeners": [
+                    {
+                        "InstancePort": "8888", 
+                        "LoadBalancerPort": "8888", 
+                        "Protocol": "TCP"
+                    }
+                ], 
+                "Subnets": {
+                    "Ref": "Subnets"
+                }
+            }, 
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer"
+        }, 
+        "ConsulInstanceProfile": {
+            "Properties": {
+                "Path": "/ConsulInstanceRole/", 
+                "Roles": [
+                    {
+                        "Ref": "ConsulInstanceRole"
+                    }
+                ]
+            }, 
+            "Type": "AWS::IAM::InstanceProfile"
+        }, 
+        "ConsulInstanceRole": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": {
+                        "Action": [
+                            "sts:AssumeRole"
+                        ], 
+                        "Effect": "Allow", 
+                        "Principal": {
+                            "Service": [
+                                "ec2.amazonaws.com"
+                            ]
+                        }
+                    }
+                }, 
+                "Path": "/ConsulInstanceRole/", 
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "ec2:DescribeInstances"
+                                    ], 
+                                    "Effect": "Allow", 
+                                    "Resource": "*"
+                                }
+                            ]
+                        }, 
+                        "PolicyName": "ConsulInstancePolicy"
+                    }
+                ]
+            }, 
+            "Type": "AWS::IAM::Role"
+        }, 
+        "LaunchConfig": {
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "config": {
+                        "files": {
+                            "/etc/chef/node.json": {
+                                "consul": {
+                                    "bootstrap_expect": "3", 
+                                    "datacenter": {
+                                        "Ref": "AWS::Region"
+                                    }, 
+                                    "servers": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BootstrapLoadBalancer", 
+                                                "DNSName"
+                                            ]
+                                        }
+                                    ], 
+                                    "service_mode": "cluster"
+                                }, 
+                                "name": "consul-cookbook-test", 
+                                "run_list": [
+                                    "recipe[consul::_service]"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }, 
+            "Properties": {
+                "AssociatePublicIpAddress": "true", 
+                "IamInstanceProfile": {
+                    "Ref": "ConsulInstanceProfile"
+                }, 
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap", 
+                        {
+                            "Ref": "AWS::Region"
+                        }, 
+                        "AMI"
+                    ]
+                }, 
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                }, 
+                "KeyName": {
+                    "Ref": "KeyName"
+                }, 
+                "SecurityGroups": [
+                    {
+                        "Ref": "ServerSecurityGroup"
+                    }, 
+                    {
+                        "Ref": "AdminSecurityGroup"
+                    }
+                ], 
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "", 
+                            [
+                                "#!/bin/bash\n", 
+                                "set -ev\n", 
+                                "\n", 
+                                "chef-solo -N consul-test-chef-solo -j node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n", 
+                                "\n", 
+                                "# All is well so signal success\n", 
+                                "/usr/local/bin/cfn-signal -e 0 -r \"Elasticsearch setup complete\" '", 
+                                {
+                                    "Ref": "WaitHandle"
+                                }, 
+                                "'\n", 
+                                ""
+                            ]
+                        ]
+                    }
+                }
+            }, 
+            "Type": "AWS::AutoScaling::LaunchConfiguration"
+        }, 
+        "SecurityGroupIngress": {
+            "Properties": {
+                "FromPort": "0", 
+                "GroupId": {
+                    "Ref": "ServerSecurityGroup"
+                }, 
+                "IpProtocol": "-1", 
+                "SourceSecurityGroupId": {
+                    "Ref": "ServerSecurityGroup"
+                }, 
+                "ToPort": "65535"
+            }, 
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        }, 
+        "ServerGroup": {
+            "Properties": {
+                "AvailabilityZones": {
+                    "Fn::If": [
+                        "UseAllAvailabilityZones", 
+                        {
+                            "Fn::GetAZs": "AWS::Region"
+                        }, 
+                        {
+                            "Ref": "AvailabilityZones"
+                        }
+                    ]
+                }, 
+                "DesiredCapacity": {
+                    "Ref": "ClusterSize"
+                }, 
+                "LaunchConfigurationName": {
+                    "Ref": "LaunchConfig"
+                }, 
+                "LoadBalancerNames": [
+                    {
+                        "Ref": "BootstrapLoadBalancer"
+                    }
+                ], 
+                "MaxSize": "9", 
+                "MinSize": "1", 
+                "Tags": [
+                    {
+                        "Key": "Name", 
+                        "PropagateAtLaunch": "true", 
+                        "Value": {
+                            "Fn::Join": [
+                                "-", 
+                                [
+                                    {
+                                        "Ref": "AWS::Region"
+                                    }, 
+                                    {
+                                        "Ref": "Environment"
+                                    }, 
+                                    "consul"
+                                ]
+                            ]
+                        }
+                    }, 
+                    {
+                        "Key": "role", 
+                        "PropagateAtLaunch": "true", 
+                        "Value": "elasticsearch_catalog"
+                    }
+                ], 
+                "VPCZoneIdentifier": {
+                    "Ref": "Subnets"
+                }
+            }, 
+            "Type": "AWS::AutoScaling::AutoScalingGroup"
+        }, 
+        "ServerSecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Enable SSH and Consul access", 
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "10.0.0.0/8", 
+                        "FromPort": "22", 
+                        "IpProtocol": "tcp", 
+                        "ToPort": "22"
+                    }
+                ], 
+                "VpcId": {
+                    "Ref": "VpcId"
+                }
+            }, 
+            "Type": "AWS::EC2::SecurityGroup"
+        }, 
+        "WaitHandle": {
+            "Type": "AWS::CloudFormation::WaitConditionHandle"
+        }
+    }
+}

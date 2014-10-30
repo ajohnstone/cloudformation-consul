@@ -5,8 +5,7 @@ import troposphere.iam as iam
 import troposphere.autoscaling as autoscaling
 import troposphere.ec2 as ec2
 import troposphere.cloudformation as cloudformation
-import awacs
-import awacs.aws
+import troposphere.elasticloadbalancing as elb
 
 ENDLINE = "ENDLINE"
 
@@ -92,13 +91,7 @@ availability_zones = template.add_parameter(Parameter(
 
 region_map = template.add_mapping('RegionMap', {
     "us-east-1":      {"AMI": "ami-fe01b796"},
-    "us-west-1":      {"AMI": "ami-02141347"},
-    "us-west-2":      {"AMI": "ami-2598ea15"},
-    "eu-west-1":      {"AMI": "ami-27aa6450"},
-    "sa-east-1":      {"AMI": "ami-0d18b410"},
-    "ap-southeast-1": {"AMI": "ami-1695c944"},
     "ap-southeast-2": {"AMI": "ami-c16d00fb"},
-    "ap-northeast-1": {"AMI": "ami-a13876a0"}
 })
 
 # Conditions
@@ -113,25 +106,38 @@ use_all_availability_zones = template.add_condition(
 
 # Resources
 
-iam_user = template.add_resource(iam.User(
-    "IAMUser",
-    Policies = [iam.Policy(
-        PolicyName = "IAMAccess",
-        PolicyDocument = awacs.aws.Policy(
-            Statement = [
-                awacs.aws.Statement(
-                    Effect = "Allow",
-                    NotAction = [awacs.aws.Action("iam", "*")],
-                    Resource = ["*"]
-                )
-            ]
+consul_instance_role = template.add_resource(iam.Role(
+    "ConsulInstanceRole",
+    AssumeRolePolicyDocument = {
+        "Statement" : {
+            "Effect" : "Allow",
+            "Principal" : {
+                "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+        }
+    },
+    Path = "/ConsulInstanceRole/",
+    Policies = [
+        iam.Policy(
+            PolicyName="ConsulInstancePolicy",
+            PolicyDocument= {
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [ "ec2:DescribeInstances" ],
+                        "Resource": "*"
+                    }
+                ]
+            }
         )
-    )]
+    ]
 ))
 
-host_keys = template.add_resource(iam.AccessKey(
-    "HostKeys",
-    UserName = Ref(iam_user)
+consul_instance_profile = template.add_resource(iam.InstanceProfile(
+    "ConsulInstanceProfile",
+    Path = "/ConsulInstanceRole/",
+    Roles = [Ref(consul_instance_role)]
 ))
 
 server_security_group = template.add_resource(ec2.SecurityGroup(
@@ -157,25 +163,28 @@ security_group_ingress = template.add_resource(ec2.SecurityGroupIngress(
     SourceSecurityGroupId = Ref(server_security_group)
 ))
 
+bootstrap_load_balancer = template.add_resource(elb.LoadBalancer(
+    "BootstrapLoadBalancer",
+    Subnets=Ref(subnets),
+    Listeners=[
+        {
+            "LoadBalancerPort": "8888",
+            "InstancePort" : "8888",
+            "Protocol" : "TCP"
+        }
+    ]
+))
+
 wait_handle = template.add_resource(cloudformation.WaitConditionHandle("WaitHandle"))
 
 # Load up and process the cloud-init script
 
 cloud_init_script = open("cloud-init.sh", 'r').read().replace("\n", "\n" + ENDLINE)
 
-node_json = open("node.json").read()
-
 cloud_init_script_lines = cloud_init_script.split(ENDLINE)
 
 replacements = [
-    ["NODE_JSON", node_json],
     ["WAIT_HANDLE", Ref(wait_handle)],
-    ["ACCESS_KEY", Ref(host_keys)],
-    ["SECRET_KEY", GetAtt(host_keys, "SecretAccessKey")],
-    ["CLUSTER_SIZE", Ref(cluster_size)],
-    ["REGION", Ref("AWS::Region")],
-    ["ENVIRONMENT", Ref(environment)],
-    ["GROUPS", GetAtt(server_security_group, "GroupId")]
 ]
 
 for pair in replacements:
@@ -188,6 +197,7 @@ launch_config = template.add_resource(autoscaling.LaunchConfiguration(
     KeyName = Ref(keyname),
     ImageId = FindInMap("RegionMap", Ref("AWS::Region"), "AMI"),
     InstanceType = Ref(instance_type),
+    IamInstanceProfile = Ref(consul_instance_profile),
     SecurityGroups = [
         Ref(server_security_group),
         Ref(admin_security_group)
@@ -195,7 +205,34 @@ launch_config = template.add_resource(autoscaling.LaunchConfiguration(
     AssociatePublicIpAddress = "true",
     UserData = Base64(
         Join("", cloud_init_script_lines)
-    )
+    ),
+    Metadata = {
+        "AWS::CloudFormation::Init" : {
+            "config": {
+                "files": {
+                    # "/etc/consul.d/default.json" : {
+                    #     "data_dir": "/var/lib/consul",
+                    #     "server": True,
+                    #     "bootstrap_expect": 3,
+                    #     "start_join": [GetAtt(bootstrap_load_balancer, "DNSName")],
+                    #     "datacenter": Ref("AWS::Region")
+                    # },
+                    "/etc/chef/node.json": {
+                        "name": "consul-cookbook-test",
+                        "run_list": [
+                            "recipe[consul::_service]"
+                        ],
+                        "consul": {
+                            "service_mode" : "cluster",
+                            "servers" : [GetAtt(bootstrap_load_balancer, "DNSName")],
+                            "datacenter" : Ref("AWS::Region"),
+                            "bootstrap_expect": "3"
+                        }
+                    }
+                }
+            }
+        }
+    }
 ))
 
 server_group = template.add_resource(autoscaling.AutoScalingGroup(
@@ -206,6 +243,7 @@ server_group = template.add_resource(autoscaling.AutoScalingGroup(
         Ref(availability_zones)
     ),
     LaunchConfigurationName = Ref(launch_config),
+    LoadBalancerNames=[Ref("BootstrapLoadBalancer")],
     MinSize = "1",
     MaxSize = "9",
     DesiredCapacity = Ref(cluster_size),
@@ -215,41 +253,6 @@ server_group = template.add_resource(autoscaling.AutoScalingGroup(
         {"Key" : "role", "Value" : "elasticsearch_catalog", "PropagateAtLaunch" : "true"} 
     ]
 ))
-
-# Outputs
-
-template.add_output([
-    # Output(
-    #     "InstanceId",
-    #     Description="InstanceId of the newly created EC2 instance",
-    #     Value=Ref(ec2_instance),
-    # ),
-    # Output(
-    #     "AZ",
-    #     Description="Availability Zone of the newly created EC2 instance",
-    #     Value=GetAtt(ec2_instance, "AvailabilityZone"),
-    # ),
-    # Output(
-    #     "PublicIP",
-    #     Description="Public IP address of the newly created EC2 instance",
-    #     Value=GetAtt(ec2_instance, "PublicIp"),
-    # ),
-    # Output(
-    #     "PrivateIP",
-    #     Description="Private IP address of the newly created EC2 instance",
-    #     Value=GetAtt(ec2_instance, "PrivateIp"),
-    # ),
-    # Output(
-    #     "PublicDNS",
-    #     Description="Public DNSName of the newly created EC2 instance",
-    #     Value=GetAtt(ec2_instance, "PublicDnsName"),
-    # ),
-    # Output(
-    #     "PrivateDNS",
-    #     Description="Private DNSName of the newly created EC2 instance",
-    #     Value=GetAtt(ec2_instance, "PrivateDnsName"),
-    # ),
-])
 
 if __name__ == "__main__":
     print(template.to_json())
