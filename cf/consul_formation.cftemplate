@@ -136,25 +136,27 @@
                     "config": {
                         "files": {
                             "/etc/chef/node.json": {
-                                "consul": {
-                                    "bootstrap_expect": "3", 
-                                    "datacenter": {
-                                        "Ref": "AWS::Region"
+                                "content": {
+                                    "consul": {
+                                        "bootstrap_expect": "3", 
+                                        "datacenter": {
+                                            "Ref": "AWS::Region"
+                                        }, 
+                                        "servers": [
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "BootstrapLoadBalancer", 
+                                                    "DNSName"
+                                                ]
+                                            }
+                                        ], 
+                                        "service_mode": "cluster"
                                     }, 
-                                    "servers": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "BootstrapLoadBalancer", 
-                                                "DNSName"
-                                            ]
-                                        }
-                                    ], 
-                                    "service_mode": "cluster"
-                                }, 
-                                "name": "consul-cookbook-test", 
-                                "run_list": [
-                                    "recipe[consul::_service]"
-                                ]
+                                    "name": "consul-cookbook-test", 
+                                    "run_list": [
+                                        "recipe[consul::_service]"
+                                    ]
+                                }
                             }
                         }
                     }
@@ -199,8 +201,7 @@
                                 {
                                     "Ref": "AWS::StackId"
                                 }, 
-                                " -r VpnInstance ", 
-                                "--region ", 
+                                " -r LaunchConfig --region ", 
                                 {
                                     "Ref": "AWS::Region"
                                 }, 

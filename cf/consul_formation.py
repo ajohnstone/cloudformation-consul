@@ -175,7 +175,7 @@ launch_config = template.add_resource(autoscaling.LaunchConfiguration(
         Join("", [
             "#!/bin/bash\n",
             "set -ev\n",
-            "/usr/local/bin/cfn-init -s ",{ "Ref" : "AWS::StackId" }, " -r VpnInstance ", "--region ", { "Ref" : "AWS::Region" }, "\n",
+            "/usr/local/bin/cfn-init -s ",{ "Ref" : "AWS::StackId" }, " -r LaunchConfig --region ", { "Ref" : "AWS::Region" }, "\n",
             "chef-solo -N consul-test-chef-solo -j /etc/chef/node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n",
             "/usr/local/bin/cfn-signal -e 0 -r 'Consul setup complete'", Ref(wait_handle)
         ])
@@ -192,15 +192,17 @@ launch_config = template.add_resource(autoscaling.LaunchConfiguration(
                     #     "datacenter": Ref("AWS::Region")
                     # },
                     "/etc/chef/node.json": {
-                        "name": "consul-cookbook-test",
-                        "run_list": [
-                            "recipe[consul::_service]"
-                        ],
-                        "consul": {
-                            "service_mode" : "cluster",
-                            "servers" : [GetAtt(bootstrap_load_balancer, "DNSName")],
-                            "datacenter" : Ref("AWS::Region"),
-                            "bootstrap_expect": "3"
+                        "content": {
+                            "name": "consul-cookbook-test",
+                            "run_list": [
+                                "recipe[consul::_service]"
+                            ],
+                            "consul": {
+                                "service_mode" : "cluster",
+                                "servers" : [GetAtt(bootstrap_load_balancer, "DNSName")],
+                                "datacenter" : Ref("AWS::Region"),
+                                "bootstrap_expect": "3"
+                            }
                         }
                     }
                 }
