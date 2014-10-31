@@ -255,8 +255,12 @@
                         "Ref": "BootstrapLoadBalancer"
                     }
                 ], 
-                "MaxSize": "9", 
-                "MinSize": "1", 
+                "MaxSize": {
+                    "Ref": "ClusterSize"
+                }, 
+                "MinSize": {
+                    "Ref": "ClusterSize"
+                }, 
                 "Tags": [
                     {
                         "Key": "Name", 

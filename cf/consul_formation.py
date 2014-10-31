@@ -218,8 +218,8 @@ server_group = template.add_resource(autoscaling.AutoScalingGroup(
     ),
     LaunchConfigurationName = Ref(launch_config),
     LoadBalancerNames=[Ref("BootstrapLoadBalancer")],
-    MinSize = "1",
-    MaxSize = "9",
+    MinSize = Ref(cluster_size),
+    MaxSize = Ref(cluster_size),
     DesiredCapacity = Ref(cluster_size),
     VPCZoneIdentifier = Ref(subnets),
     Tags = [
