@@ -196,7 +196,7 @@
                                 "#!/bin/bash\n", 
                                 "set -ev\n", 
                                 "\n", 
-                                "chef-solo -N consul-test-chef-solo -j node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n", 
+                                "chef-solo -N consul-test-chef-solo -j /etc/chef/node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n", 
                                 "\n", 
                                 "# All is well so signal success\n", 
                                 "/usr/local/bin/cfn-signal -e 0 -r \"Elasticsearch setup complete\" '", 

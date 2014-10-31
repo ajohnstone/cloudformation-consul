@@ -179,7 +179,7 @@ wait_handle = template.add_resource(cloudformation.WaitConditionHandle("WaitHand
 
 # Load up and process the cloud-init script
 
-cloud_init_script = open("cloud-init.sh", 'r').read().replace("\n", "\n" + ENDLINE)
+cloud_init_script = open("./cf/cloud-init.sh", 'r').read().replace("\n", "\n" + ENDLINE)
 
 cloud_init_script_lines = cloud_init_script.split(ENDLINE)
 
