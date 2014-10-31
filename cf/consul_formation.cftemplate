@@ -161,7 +161,7 @@
                 }
             }, 
             "Properties": {
-                "AssociatePublicIpAddress": "true", 
+                "AssociatePublicIpAddress": "false", 
                 "IamInstanceProfile": {
                     "Ref": "ConsulInstanceProfile"
                 }, 
@@ -195,16 +195,21 @@
                             [
                                 "#!/bin/bash\n", 
                                 "set -ev\n", 
+                                "/usr/local/bin/cfn-init -s ", 
+                                {
+                                    "Ref": "AWS::StackId"
+                                }, 
+                                " -r VpnInstance ", 
+                                "--region ", 
+                                {
+                                    "Ref": "AWS::Region"
+                                }, 
                                 "\n", 
                                 "chef-solo -N consul-test-chef-solo -j /etc/chef/node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n", 
-                                "\n", 
-                                "# All is well so signal success\n", 
-                                "/usr/local/bin/cfn-signal -e 0 -r \"Elasticsearch setup complete\" '", 
+                                "/usr/local/bin/cfn-signal -e 0 -r 'Consul setup complete'", 
                                 {
                                     "Ref": "WaitHandle"
-                                }, 
-                                "'\n", 
-                                ""
+                                }
                             ]
                         ]
                     }

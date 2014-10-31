@@ -7,23 +7,6 @@ import troposphere.ec2 as ec2
 import troposphere.cloudformation as cloudformation
 import troposphere.elasticloadbalancing as elb
 
-ENDLINE = "ENDLINE"
-
-def splice_ref(lines, pattern, replacement):
-    matching_lines = filter(lambda x: isinstance(x, str) and x.find(pattern) != -1, lines)
-    out = []
-    for mixed in lines:
-        if isinstance(mixed, str) and mixed in matching_lines:
-            tokens = mixed.split(pattern)
-
-            for i in range(0, len(tokens) - 1):
-                out.append(tokens[i])
-                out.append(replacement)
-            out.append(tokens[len(tokens) - 1])
-        else:
-            out.append(mixed)
-    return out
-
 template = Template()
 
 template.description = "Start a Consul cluster"
@@ -177,21 +160,6 @@ bootstrap_load_balancer = template.add_resource(elb.LoadBalancer(
 
 wait_handle = template.add_resource(cloudformation.WaitConditionHandle("WaitHandle"))
 
-# Load up and process the cloud-init script
-
-cloud_init_script = open("./cf/cloud-init.sh", 'r').read().replace("\n", "\n" + ENDLINE)
-
-cloud_init_script_lines = cloud_init_script.split(ENDLINE)
-
-replacements = [
-    ["WAIT_HANDLE", Ref(wait_handle)],
-]
-
-for pair in replacements:
-    cloud_init_script_lines = splice_ref(cloud_init_script_lines, pair[0], pair[1])
-
-# More resources
-
 launch_config = template.add_resource(autoscaling.LaunchConfiguration(
     "LaunchConfig",
     KeyName = Ref(keyname),
@@ -202,9 +170,15 @@ launch_config = template.add_resource(autoscaling.LaunchConfiguration(
         Ref(server_security_group),
         Ref(admin_security_group)
     ],
-    AssociatePublicIpAddress = "true",
+    AssociatePublicIpAddress = "false",
     UserData = Base64(
-        Join("", cloud_init_script_lines)
+        Join("", [
+            "#!/bin/bash\n",
+            "set -ev\n",
+            "/usr/local/bin/cfn-init -s ",{ "Ref" : "AWS::StackId" }, " -r VpnInstance ", "--region ", { "Ref" : "AWS::Region" }, "\n",
+            "chef-solo -N consul-test-chef-solo -j /etc/chef/node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n",
+            "/usr/local/bin/cfn-signal -e 0 -r 'Consul setup complete'", Ref(wait_handle)
+        ])
     ),
     Metadata = {
         "AWS::CloudFormation::Init" : {

@@ -11,7 +11,7 @@ PARAMS_FILE=./cf/$STACK_NAME.json
 
 ruby ./cf/aws_parameter_lookup.rb $VPC_NAME $REGION > ./cf/$STACK_NAME.json
 
-aws cloudformation create-stack \
+aws cloudformation update-stack \
 --stack-name $STACK_NAME \
 --region $REGION \
 --template-body file://cf/consul_formation.cftemplate \
