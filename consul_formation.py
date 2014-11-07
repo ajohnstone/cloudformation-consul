@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 from troposphere import *
 
 import troposphere.iam as iam
@@ -62,6 +62,12 @@ cluster_size = template.add_parameter(Parameter(
     Type = "Number",
     Default = "3"
 ))
+cluster_name = template.add_parameter(Parameter(
+    "ClusterName",
+    Description = "Name of the Cluster",
+    Type = "String",
+))
+
 
 subnets = template.add_parameter(Parameter(
     "Subnets",
@@ -80,6 +86,13 @@ admin_security_group = template.add_parameter(Parameter(
     Description = "Existing security group that should be granded administrative access to Consul (e.g., 'sg-123456')",
     Type = "String"
 ))
+
+clientsecurity_group = template.add_parameter(Parameter(
+    "ClientSecurityGroup",
+    Description = "Existing security group that should be granded administrative access to Consul (e.g., 'sg-123456')",
+    Type = "String"
+))
+
 
 availability_zones = template.add_parameter(Parameter(
     "AvailabilityZones",
