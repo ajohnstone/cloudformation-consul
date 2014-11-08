@@ -17,11 +17,8 @@
     "Description": "Start a Consul cluster", 
     "Mappings": {
         "RegionMap": {
-            "ap-southeast-2": {
-                "AMI": "ami-c16d00fb"
-            }, 
             "us-east-1": {
-                "AMI": "ami-fe01b796"
+                "AMI": "ami-c0e964a8"
             }
         }
     }, 
@@ -73,11 +70,32 @@
             "Properties": {
                 "Listeners": [
                     {
-                        "InstancePort": "8888", 
-                        "LoadBalancerPort": "8888", 
+                        "InstancePort": "8300", 
+                        "LoadBalancerPort": "8300", 
+                        "Protocol": "TCP"
+                    }, 
+                    {
+                        "InstancePort": "8400", 
+                        "LoadBalancerPort": "8400", 
+                        "Protocol": "TCP"
+                    }, 
+                    {
+                        "InstancePort": "8500", 
+                        "LoadBalancerPort": "8500", 
+                        "Protocol": "TCP"
+                    }, 
+                    {
+                        "InstancePort": "8600", 
+                        "LoadBalancerPort": "8600", 
+                        "Protocol": "TCP"
+                    }, 
+                    {
+                        "InstancePort": "8301", 
+                        "LoadBalancerPort": "8301", 
                         "Protocol": "TCP"
                     }
                 ], 
+                "Scheme": "internal", 
                 "Subnets": {
                     "Ref": "Subnets"
                 }
@@ -207,10 +225,7 @@
                                 }, 
                                 "\n", 
                                 "chef-solo -N consul-test-chef-solo -j /etc/chef/node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n", 
-                                "/usr/local/bin/cfn-signal -e 0 -r 'Consul setup complete'", 
-                                {
-                                    "Ref": "WaitHandle"
-                                }
+                                "/usr/sbin/service consul start\n"
                             ]
                         ]
                     }
@@ -271,9 +286,6 @@
                                 "-", 
                                 [
                                     {
-                                        "Ref": "AWS::Region"
-                                    }, 
-                                    {
                                         "Ref": "Environment"
                                     }, 
                                     "consul"
@@ -309,9 +321,6 @@
                 }
             }, 
             "Type": "AWS::EC2::SecurityGroup"
-        }, 
-        "WaitHandle": {
-            "Type": "AWS::CloudFormation::WaitConditionHandle"
         }
     }
 }

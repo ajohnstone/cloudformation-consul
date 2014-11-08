@@ -73,8 +73,8 @@ availability_zones = template.add_parameter(Parameter(
 # Mappings
 
 region_map = template.add_mapping('RegionMap', {
-    "us-east-1":      {"AMI": "ami-fe01b796"},
-    "ap-southeast-2": {"AMI": "ami-c16d00fb"},
+    "us-east-1":      {"AMI": "ami-c0e964a8"},
+    # "ap-southeast-2": {"AMI": "ami-c16d00fb"},
 })
 
 # Conditions
@@ -148,17 +148,36 @@ security_group_ingress = template.add_resource(ec2.SecurityGroupIngress(
 
 bootstrap_load_balancer = template.add_resource(elb.LoadBalancer(
     "BootstrapLoadBalancer",
+    Scheme="internal",
     Subnets=Ref(subnets),
     Listeners=[
         {
-            "LoadBalancerPort": "8888",
-            "InstancePort" : "8888",
+            "LoadBalancerPort": "8300",
+            "InstancePort" : "8300",
+            "Protocol" : "TCP"
+        },
+        {
+            "LoadBalancerPort": "8400",
+            "InstancePort" : "8400",
+            "Protocol" : "TCP"
+        },
+        {
+            "LoadBalancerPort": "8500",
+            "InstancePort" : "8500",
+            "Protocol" : "TCP"
+        },
+        {
+            "LoadBalancerPort": "8600",
+            "InstancePort" : "8600",
+            "Protocol" : "TCP"
+        },
+        {
+            "LoadBalancerPort": "8301",
+            "InstancePort" : "8301",
             "Protocol" : "TCP"
         }
     ]
 ))
-
-wait_handle = template.add_resource(cloudformation.WaitConditionHandle("WaitHandle"))
 
 launch_config = template.add_resource(autoscaling.LaunchConfiguration(
     "LaunchConfig",
@@ -177,7 +196,7 @@ launch_config = template.add_resource(autoscaling.LaunchConfiguration(
             "set -ev\n",
             "/usr/local/bin/cfn-init -s ",{ "Ref" : "AWS::StackId" }, " -r LaunchConfig --region ", { "Ref" : "AWS::Region" }, "\n",
             "chef-solo -N consul-test-chef-solo -j /etc/chef/node.json -c /home/ubuntu/packer-chef-solo/solo.rb\n",
-            "/usr/local/bin/cfn-signal -e 0 -r 'Consul setup complete'", Ref(wait_handle)
+            "/usr/sbin/service consul start\n"
         ])
     ),
     Metadata = {
@@ -225,7 +244,7 @@ server_group = template.add_resource(autoscaling.AutoScalingGroup(
     DesiredCapacity = Ref(cluster_size),
     VPCZoneIdentifier = Ref(subnets),
     Tags = [
-        {"Key" : "Name", "Value" : Join("-", [Ref("AWS::Region"), Ref(environment), "consul"]), "PropagateAtLaunch" : "true"},
+        {"Key" : "Name", "Value" : Join("-", [Ref(environment), "consul"]), "PropagateAtLaunch" : "true"},
         {"Key" : "role", "Value" : "elasticsearch_catalog", "PropagateAtLaunch" : "true"} 
     ]
 ))
