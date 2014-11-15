@@ -70,26 +70,6 @@
             "Properties": {
                 "Listeners": [
                     {
-                        "InstancePort": "8300", 
-                        "LoadBalancerPort": "8300", 
-                        "Protocol": "TCP"
-                    }, 
-                    {
-                        "InstancePort": "8400", 
-                        "LoadBalancerPort": "8400", 
-                        "Protocol": "TCP"
-                    }, 
-                    {
-                        "InstancePort": "8500", 
-                        "LoadBalancerPort": "8500", 
-                        "Protocol": "TCP"
-                    }, 
-                    {
-                        "InstancePort": "8600", 
-                        "LoadBalancerPort": "8600", 
-                        "Protocol": "TCP"
-                    }, 
-                    {
                         "InstancePort": "8301", 
                         "LoadBalancerPort": "8301", 
                         "Protocol": "TCP"
@@ -101,6 +81,31 @@
                 }
             }, 
             "Type": "AWS::ElasticLoadBalancing::LoadBalancer"
+        }, 
+        "ConsulDiscoveryAddress": {
+            "HostedZoneName": "dev.spongecell.com", 
+            "Name": {
+                "Fn::Join": [
+                    "", 
+                    [
+                        {
+                            "Ref": "AWS::StackName"
+                        }, 
+                        ".", 
+                        "dev.spongecell.com"
+                    ]
+                ]
+            }, 
+            "ResourceRecords": [
+                {
+                    "Fn::GetAtt": [
+                        "BootstrapLoadBalancer", 
+                        "DNSName"
+                    ]
+                }
+            ], 
+            "TTL": "300", 
+            "Type": "CNAME"
         }, 
         "ConsulInstanceProfile": {
             "Properties": {
@@ -175,6 +180,19 @@
                                         "recipe[consul::_service]"
                                     ]
                                 }
+                            }, 
+                            "/etc/consul.d/default.json": {
+                                "bootstrap_expect": 3, 
+                                "data_dir": "/var/lib/consul", 
+                                "datacenter": {
+                                    "Ref": "AWS::Region"
+                                }, 
+                                "server": true, 
+                                "start_join": [
+                                    {
+                                        "Ref": "ConsulDiscoveryAddress"
+                                    }
+                                ]
                             }
                         }
                     }
@@ -296,7 +314,7 @@
                     {
                         "Key": "role", 
                         "PropagateAtLaunch": "true", 
-                        "Value": "elasticsearch_catalog"
+                        "Value": "consul"
                     }
                 ], 
                 "VPCZoneIdentifier": {
@@ -314,6 +332,12 @@
                         "FromPort": "22", 
                         "IpProtocol": "tcp", 
                         "ToPort": "22"
+                    }, 
+                    {
+                        "CidrIp": "10.0.0.0/8", 
+                        "FromPort": "8301", 
+                        "IpProtocol": "tcp", 
+                        "ToPort": "8301"
                     }
                 ], 
                 "VpcId": {

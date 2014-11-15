@@ -6,6 +6,7 @@ import troposphere.autoscaling as autoscaling
 import troposphere.ec2 as ec2
 import troposphere.cloudformation as cloudformation
 import troposphere.elasticloadbalancing as elb
+import troposphere.route53 as route53
 
 template = Template()
 
@@ -133,6 +134,12 @@ server_security_group = template.add_resource(ec2.SecurityGroup(
             FromPort = "22",
             ToPort = "22",
             CidrIp = "10.0.0.0/8"
+        ),
+        ec2.SecurityGroupRule(
+            IpProtocol = "tcp",
+            FromPort = "8301",
+            ToPort = "8301",
+            CidrIp = "10.0.0.0/8"
         )
     ]
 ))
@@ -152,31 +159,20 @@ bootstrap_load_balancer = template.add_resource(elb.LoadBalancer(
     Subnets=Ref(subnets),
     Listeners=[
         {
-            "LoadBalancerPort": "8300",
-            "InstancePort" : "8300",
-            "Protocol" : "TCP"
-        },
-        {
-            "LoadBalancerPort": "8400",
-            "InstancePort" : "8400",
-            "Protocol" : "TCP"
-        },
-        {
-            "LoadBalancerPort": "8500",
-            "InstancePort" : "8500",
-            "Protocol" : "TCP"
-        },
-        {
-            "LoadBalancerPort": "8600",
-            "InstancePort" : "8600",
-            "Protocol" : "TCP"
-        },
-        {
             "LoadBalancerPort": "8301",
             "InstancePort" : "8301",
             "Protocol" : "TCP"
         }
     ]
+))
+
+consul_discovery_address = template.add_resource(route53.RecordSet(
+    "ConsulDiscoveryAddress",
+    HostedZoneName="dev.spongecell.com",
+    Name=Join("", [Ref("AWS::StackName"),".", "dev.spongecell.com"]),
+    ResourceRecords=[GetAtt(bootstrap_load_balancer, "DNSName")],
+    TTL="300",
+    Type="CNAME"
 ))
 
 launch_config = template.add_resource(autoscaling.LaunchConfiguration(
@@ -203,13 +199,13 @@ launch_config = template.add_resource(autoscaling.LaunchConfiguration(
         "AWS::CloudFormation::Init" : {
             "config": {
                 "files": {
-                    # "/etc/consul.d/default.json" : {
-                    #     "data_dir": "/var/lib/consul",
-                    #     "server": True,
-                    #     "bootstrap_expect": 3,
-                    #     "start_join": [GetAtt(bootstrap_load_balancer, "DNSName")],
-                    #     "datacenter": Ref("AWS::Region")
-                    # },
+                    "/etc/consul.d/default.json" : {
+                        "data_dir": "/var/lib/consul",
+                        "server": True,
+                        "bootstrap_expect": 3,
+                        "start_join": [Ref(consul_discovery_address)],
+                        "datacenter": Ref("AWS::Region")
+                    },
                     "/etc/chef/node.json": {
                         "content": {
                             "name": "consul-cookbook-test",
@@ -245,7 +241,7 @@ server_group = template.add_resource(autoscaling.AutoScalingGroup(
     VPCZoneIdentifier = Ref(subnets),
     Tags = [
         {"Key" : "Name", "Value" : Join("-", [Ref(environment), "consul"]), "PropagateAtLaunch" : "true"},
-        {"Key" : "role", "Value" : "elasticsearch_catalog", "PropagateAtLaunch" : "true"} 
+        {"Key" : "role", "Value" : "consul", "PropagateAtLaunch" : "true"} 
     ]
 ))
 
