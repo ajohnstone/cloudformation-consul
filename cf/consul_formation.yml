@@ -1,0 +1,217 @@
+---
+Description: Start a Consul cluster
+Conditions:
+  UseAllAvailabilityZones:
+    Fn::Equals:
+    - Fn::Join:
+      - ''
+      - Ref: AvailabilityZones
+    - ''
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-c0e964a8
+Parameters:
+  AdminSecurityGroup:
+    Description: Existing security group that should be granded administrative access to Consul (e.g., 'sg-123456')
+    Type: String
+  AvailabilityZones:
+    Default: ''
+    Description: "(Optional) If passed, only launch nodes in these AZs (e.g., 'us-east-1a,us-east-1b'). Note: these must match up with the passed Subnets."
+    Type: CommaDelimitedList
+  ClusterSize:
+    Default: '3'
+    Description: Number of nodes to launch
+    Type: Number
+  Environment:
+    Default: dev
+    Description: 'Environment (example: dev, prod)'
+    Type: String
+  InstanceType:
+    AllowedValues:
+    - m3.medium
+    - m3.large
+    ConstraintDescription: must be a valid EC2 instance type.
+    Default: m3.medium
+    Description: EC2 instance type
+    Type: String
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: String
+  Subnets:
+    Description: 'List of VPC subnet IDs for the cluster. Note: must match up with the passed AvailabilityZones'
+    Type: CommaDelimitedList
+  VpcId:
+    Description: VPC associated with the provided subnets
+    Type: String
+Resources:
+  BootstrapLoadBalancer:
+    Properties:
+      Listeners:
+      - InstancePort: '8301'
+        LoadBalancerPort: '8301'
+        Protocol: TCP
+      Scheme: internal
+      Subnets:
+        Ref: Subnets
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+  ConsulDiscoveryAddress:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: dev.spongecell.net.
+      Name:
+        Fn::Join:
+        - ''
+        - - Ref: AWS::StackName
+          - "."
+          - dev.spongecell.net
+      ResourceRecords:
+      - Fn::GetAtt:
+        - BootstrapLoadBalancer
+        - DNSName
+      TTL: '300'
+      Type: CNAME
+  ConsulInstanceProfile:
+    Properties:
+      Path: "/ConsulInstanceRole/"
+      Roles:
+      - Ref: ConsulInstanceRole
+    Type: AWS::IAM::InstanceProfile
+  ConsulInstanceRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+      Path: "/ConsulInstanceRole/"
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - ec2:DescribeInstances
+            Effect: Allow
+            Resource: "*"
+        PolicyName: ConsulInstancePolicy
+    Type: AWS::IAM::Role
+  LaunchConfig:
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            "/etc/chef/node.json":
+              content:
+                consul:
+                  bootstrap_expect: '3'
+                  datacenter:
+                    Ref: AWS::Region
+                  servers:
+                  - Fn::GetAtt:
+                    - BootstrapLoadBalancer
+                    - DNSName
+                  service_mode: cluster
+                name: consul-cookbook-test
+                run_list:
+                - recipe[consul::_service]
+            "/etc/consul.d/default.json":
+              bootstrap_expect: 3
+              data_dir: "/var/lib/consul"
+              datacenter:
+                Ref: AWS::Region
+              server: true
+              start_join:
+              - Ref: ConsulDiscoveryAddress
+    Properties:
+      AssociatePublicIpAddress: 'false'
+      IamInstanceProfile:
+        Ref: ConsulInstanceProfile
+      ImageId:
+        Fn::FindInMap:
+        - RegionMap
+        - Ref: AWS::Region
+        - AMI
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyName
+      SecurityGroups:
+      - Ref: ServerSecurityGroup
+      - Ref: AdminSecurityGroup
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - |
+              #!/bin/bash
+            - |
+              set -ev
+            - "/usr/local/bin/cfn-init -s "
+            - Ref: AWS::StackId
+            - " -r LaunchConfig --region "
+            - Ref: AWS::Region
+            - |2+
+
+            - |
+              chef-solo -N consul-test-chef-solo -j /etc/chef/node.json -c /home/ubuntu/packer-chef-solo/solo.rb
+            - |
+              /usr/sbin/service consul start
+    Type: AWS::AutoScaling::LaunchConfiguration
+  SecurityGroupIngress:
+    Properties:
+      FromPort: '0'
+      GroupId:
+        Ref: ServerSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId:
+        Ref: ServerSecurityGroup
+      ToPort: '65535'
+    Type: AWS::EC2::SecurityGroupIngress
+  ServerGroup:
+    Properties:
+      AvailabilityZones:
+        Fn::If:
+        - UseAllAvailabilityZones
+        - Fn::GetAZs: AWS::Region
+        - Ref: AvailabilityZones
+      DesiredCapacity:
+        Ref: ClusterSize
+      LaunchConfigurationName:
+        Ref: LaunchConfig
+      LoadBalancerNames:
+      - Ref: BootstrapLoadBalancer
+      MaxSize:
+        Ref: ClusterSize
+      MinSize:
+        Ref: ClusterSize
+      Tags:
+      - Key: Name
+        PropagateAtLaunch: 'true'
+        Value:
+          Fn::Join:
+          - "-"
+          - - Ref: Environment
+            - consul
+      - Key: role
+        PropagateAtLaunch: 'true'
+        Value: consul
+      VPCZoneIdentifier:
+        Ref: Subnets
+    Type: AWS::AutoScaling::AutoScalingGroup
+  ServerSecurityGroup:
+    Properties:
+      GroupDescription: Enable SSH and Consul access
+      SecurityGroupIngress:
+      - CidrIp: 10.0.0.0/8
+        FromPort: '22'
+        IpProtocol: tcp
+        ToPort: '22'
+      - CidrIp: 10.0.0.0/8
+        FromPort: '8301'
+        IpProtocol: tcp
+        ToPort: '8301'
+      VpcId:
+        Ref: VpcId
+    Type: AWS::EC2::SecurityGroup
