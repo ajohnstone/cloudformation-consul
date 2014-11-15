@@ -185,17 +185,19 @@
                 }
               },
               "/etc/consul.d/default.json": {
-                "bootstrap_expect": 3,
-                "data_dir": "/var/lib/consul",
-                "datacenter": {
-                  "Ref": "AWS::Region"
-                },
-                "server": true,
-                "start_join": [
-                  {
-                    "Ref": "ConsulDiscoveryAddress"
-                  }
-                ]
+                "content": {
+                  "bootstrap_expect": 3,
+                  "data_dir": "/var/lib/consul",
+                  "datacenter": {
+                    "Ref": "AWS::Region"
+                  },
+                  "server": true,
+                  "start_join": [
+                    {
+                      "Ref": "ConsulDiscoveryAddress"
+                    }
+                  ]
+                }
               }
             }
           }
